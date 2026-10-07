@@ -11,7 +11,7 @@
 
 export const PRODUCTS = {
   'dawesome-name-generator': {
-    repo: 'toballydawes/dawesome-name-generator',
+    repo: 'ten80snowboarder/dawesome-name-generator',
     homepage: 'https://toballydawes.com/',
     asset_pattern: 'dawesome-name-generator',
   },
