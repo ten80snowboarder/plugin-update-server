@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev`. NEVER commit the real file.
+GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxxxx
+SIGNING_SECRET=replace-with-a-long-random-string
+LICENSE_STORE={"DNG-AAAA-BBBB-CCCC":{"products":["dawesome-name-generator"],"status":"active","expires":null}}
