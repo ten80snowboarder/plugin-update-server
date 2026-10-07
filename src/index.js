@@ -39,9 +39,50 @@ function changelogHtml(body) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  const lines = esc.split('\n').map((l) => l.trim()).filter(Boolean);
-  const items = lines.map((l) => `<li>${l.replace(/^[-*]\s*/, '')}</li>`).join('');
-  return `<h4>Changelog</h4><ul>${items}</ul>`;
+
+  const lines = esc.split('\n').map((l) => l.trim());
+  const out = [];
+  let inList = false;
+
+  const closeList = () => {
+    if (inList) {
+      out.push('</ul>');
+      inList = false;
+    }
+  };
+
+  for (const line of lines) {
+    if (!line) continue;
+
+    // Skip the generic "== Changelog ==" heading; we supply our own.
+    if (/^==\s*Changelog\s*==$/i.test(line)) continue;
+
+    // Version heading, e.g. "= 0.1.2 =" (but not a top-level "== ... ==").
+    const version = line.match(/^=\s*(.+?)\s*=$/);
+    if (version) {
+      closeList();
+      out.push(`<h4>${version[1]}</h4>`);
+      continue;
+    }
+
+    // Bullet item, e.g. "* Something" or "- Something".
+    const bullet = line.match(/^[-*]\s*(.+)$/);
+    if (bullet) {
+      if (!inList) {
+        out.push('<ul>');
+        inList = true;
+      }
+      out.push(`<li>${bullet[1]}</li>`);
+      continue;
+    }
+
+    // Any other line (e.g. a plain paragraph) renders as-is.
+    closeList();
+    out.push(`<p>${line}</p>`);
+  }
+  closeList();
+
+  return `<h4>Changelog</h4>${out.join('')}`;
 }
 
 /**
