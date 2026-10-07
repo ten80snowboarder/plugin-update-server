@@ -9,7 +9,7 @@ compatibility_date = "2024-11-01"
 
 # Plain (non-secret) configuration.
 [vars]
-UPDATE_BASE_URL = "https://updates.toballydawes.com"
+UPDATE_BASE_URL = "https://plugin-update-server.connect-bench.workers.dev"
 DOWNLOAD_TTL = "300"
 
 # Optional KV namespace for a future licence store. Left commented so a fresh

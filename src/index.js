@@ -176,13 +176,13 @@ export async function handleDownload(request, env, tokenStr) {
 }
 
 /**
- * Worker fetch entrypoint.
+ * Route a request to the correct handler and return a CORS-decorated response.
  *
  * @param {Request} request
  * @param {object} env
  * @returns {Promise<Response>}
  */
-export default async function fetchHandler(request, env) {
+async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
@@ -212,3 +212,17 @@ export default async function fetchHandler(request, env) {
   }
   return new Response(response.body, { status: response.status, headers });
 }
+
+/**
+ * Worker entrypoint.
+ *
+ * Exported as a module `{ fetch }` object rather than a bare default function:
+ * with newer Wrangler/runtime versions a *named* default export can be
+ * mis-detected as a class-based (RPC) entrypoint, which fails with
+ * "Class extends value ... is not a constructor". The object form is
+ * unambiguous.
+ */
+export default {
+  fetch: route,
+};
+
