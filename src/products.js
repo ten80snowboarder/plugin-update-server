@@ -24,6 +24,16 @@ export const PRODUCTS = {
     description:
       'A configurable name / insult generator. Define your own word banks and background images to produce shareable name cards.',
   },
+  cfdump: {
+    repo: 'ten80snowboarder/cfdump',
+    homepage: 'https://toballydawes.com/',
+    asset_pattern: 'cfdump',
+    requires: '6.3',
+    tested: '7.1',
+    requires_php: '8.2',
+    description:
+      'A simple plugin to add functionality like CFDUMP in ColdFusion/CFML.',
+  },
 };
 
 /**
