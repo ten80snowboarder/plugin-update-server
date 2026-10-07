@@ -8,12 +8,21 @@
 // `homepage`        Shown in the plugin's details modal.
 // `asset_pattern`   Substring a release asset filename must contain to be the
 //                   installable zip. Leave null to accept the first .zip asset.
+// `requires`        Minimum WordPress version (shown in the details modal).
+// `tested`          WordPress version the release is tested against.
+// `requires_php`    Minimum PHP version.
+// `description`     Short blurb shown in the details modal.
 
 export const PRODUCTS = {
   'dawesome-name-generator': {
     repo: 'ten80snowboarder/dawesome-name-generator',
     homepage: 'https://toballydawes.com/',
     asset_pattern: 'dawesome-name-generator',
+    requires: '6.3',
+    tested: '6.7',
+    requires_php: '8.1',
+    description:
+      'A configurable name / insult generator. Define your own word banks and background images to produce shareable name cards.',
   },
 };
 
