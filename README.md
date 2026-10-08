@@ -30,6 +30,24 @@ download URL** (HMAC), so the private asset URL is never reusable.
 | `GET/POST` | `/request` | Request a licence key (auto-issued + emailed). |
 | `GET/POST` | `/recover` | Lost-key recovery — emails all keys on file for an address. |
 
+`GET /request` accepts optional query params to **pre-fill** the form, so a
+plugin can deep-link users straight to it:
+
+| Param | Notes |
+| --- | --- |
+| `plugin` | Product slug; the matching option is pre-selected. |
+| `domain` | Site domain; pre-fills the domain field. |
+| `name` | Optional display name. |
+| `ref` | Human label for the source plugin, shown as a hint ("Opened from your … plugin"). |
+
+A plugin links to, for example:
+
+```
+/request?plugin=dawesome-name-generator&domain=example.com&name=My%20Site&ref=Dawesome%20Name%20Generator
+```
+
+Query values are treated as untrusted and re-validated on POST.
+
 ### Operator-only (admin)
 
 | Method | Path | Purpose |
@@ -119,6 +137,7 @@ web/public_html/
     worker.test.js         Unit tests for the original pure logic
     telemetry.test.js      Keys + domain normalisation
     session.test.js        Session cookie flows
+    public.test.js         /request + /recover flows (pre-fill, auto-issue, rate limits)
   CONTRACT.md              JSON contract shared with the plugin
 ```
 

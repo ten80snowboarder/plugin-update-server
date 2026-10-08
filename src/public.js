@@ -39,7 +39,10 @@ const DAY = 86400;
  */
 export async function handleRequestForm(request, env, ctx) {
   if (request.method === 'GET') {
-    return html(requestPage(env, {}));
+    // Support deep-linking from a plugin's Licence screen, e.g.
+    //   /request?plugin=dawesome-name-generator&domain=example.com
+    // Pre-fills the form so the user only has to supply their email.
+    return html(requestPage(env, { values: queryValues(request) }));
   }
   if (request.method !== 'POST') {
     return html(requestPage(env, { error: 'Method not allowed.' }), 405);
@@ -198,6 +201,34 @@ async function rateLimited(env, ip, email, nowSec) {
 }
 
 /**
+ * Extract pre-fill values for the request form from the query string.
+ *
+ * Plugins deep-link to the form with a helpful hint about who they are, e.g.
+ *   /request?plugin=dawesome-name-generator&domain=example.com&name=My%20Site
+ * Nothing here is trusted — the POST handler validates it all again — but it
+ * lets the form arrive populated so a user only has to type their email.
+ *
+ * @param {Request} request
+ * @returns {{plugin?:string, domain?:string, name?:string, email?:string, ref?:string}}
+ */
+function queryValues(request) {
+  const url = new URL(request.url);
+  const pick = (k) => (url.searchParams.get(k) || '').trim().slice(0, 120);
+  const values = {
+    plugin: pick('plugin'),
+    domain: pick('domain'),
+    name: pick('name'),
+    email: pick('email'),
+    ref: pick('ref'),
+  };
+  // Drop empties so the template falls back to its own defaults.
+  for (const k of Object.keys(values)) {
+    if (!values[k]) delete values[k];
+  }
+  return values;
+}
+
+/**
  * Parse a form body (application/x-www-form-urlencoded or JSON).
  *
  * @param {Request} request
@@ -298,10 +329,14 @@ const STYLE = `
  */
 function requestPage(env, { error, values = {} } = {}) {
   const products = productOptions(values.plugin);
+  const fromPlugin = values.ref
+    ? `<p class="hint">Opened from your ${esc(values.ref)} plugin — the details below were filled in for you.</p>`
+    : '';
   return page(
     'Request a licence key',
     `
     ${error ? `<div class="err">${esc(error)}</div>` : ''}
+    ${fromPlugin}
     <p>Enter your details and we'll email you a licence key for your site.</p>
     <form method="post" action="/request">
       <label for="email">Email <span aria-hidden="true">*</span></label>

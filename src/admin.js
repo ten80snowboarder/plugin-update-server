@@ -264,6 +264,11 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
       <form method="post" action="/admin/logout"><button class="ghost" type="submit">Sign out</button></form>
     </header>
     <p>Generated ${new Date(nowSec * 1000).toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
+    <p class="hint">Customer self-service forms:
+      <a href="/request" target="_blank" rel="noopener">Request a licence key &rarr;</a>
+      &middot;
+      <a href="/recover" target="_blank" rel="noopener">Recover a lost key &rarr;</a>
+    </p>
     ${statCards}
 
     <h2>Installs by plugin</h2>
@@ -333,6 +338,8 @@ const STYLE = `
   button { margin-top: 1.25rem; padding: .55rem 1.1rem; font: inherit; font-weight: 600;
            border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
   button.ghost { margin: 0; background: transparent; color: inherit; border: 1px solid #8886; }
+  .hint { opacity: .7; font-size: .85rem; }
+  .hint a { color: inherit; }
   .err { background: #dc2626 1a; border: 1px solid #dc2626; color: #dc2626;
          padding: .6rem .8rem; border-radius: 8px; margin: 1rem 0; max-width: 22rem; }
 `;
