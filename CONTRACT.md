@@ -25,6 +25,7 @@ GET /v1/update?plugin=dawesome-name-generator&license=DNG-AAAA&version=0.1.0&php
 | `version` | no | Installed plugin version (informational). |
 | `php` | no | Installed PHP version. |
 | `wp` | no | Installed WordPress version. |
+| `site` | no* | The site's home URL/host (e.g. `https://example.com`). Send `home_url()`. Used for usage telemetry, and for **domain locking** on licences whose `mode` is `enforce`. See below. |
 
 ### Response — update available
 
@@ -54,6 +55,15 @@ Notes:
 * `version` is the **latest** available version (may equal the installed one).
 * The plugin compares `version` against its installed version itself; the
   server does not require `version` to decide whether to answer.
+* `site` is recorded for the operator's usage dashboard. For licences in the
+  default `observe` mode it has **no effect** on the response.
+* `site` becomes **required** only when the licence's `mode` is `enforce` and it
+  has a `max_sites` limit (`site_required`), and it must then match a domain the
+  key is already bound to (`site_mismatch`). A key is bound to a domain by the
+  operator at issue/recovery time, or by the first successful telemetry
+  check-in — enforcement never emits a new binding from an update request.
+  `www.example.com` and `example.com` (scheme/port/path stripped) count as the
+  same domain.
 * `download_url` is a **short-lived, signed** URL. It is safe to log; it
   expires and is bound to the product + release.
 
@@ -78,6 +88,8 @@ Known `error` codes:
 | `invalid_license` | Key not found in the licence store. |
 | `license_product_mismatch` | Key exists but does not unlock this product. |
 | `license_expired` | Key is past its `expires` date. |
+| `site_required` | Licence is in `enforce` mode and the request did not send `site`. |
+| `site_mismatch` | Licence is in `enforce` mode and `site` is not bound to this key (or the site limit is reached). |
 | `no_release` | Repo has no published release yet. |
 | `upstream_error` | GitHub call failed; `message` has detail. |
 
