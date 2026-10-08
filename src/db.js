@@ -190,7 +190,14 @@ export async function upsertCheckin(env, e) {
 export async function summary(env, activeSince) {
   const db = getDb(env);
   if (!db) {
-    return { installs: 0, active_sites: 0, by_plugin: [], by_country: [], by_version: [] };
+    return {
+      installs: 0,
+      active_sites: 0,
+      by_plugin: [],
+      by_country: [],
+      by_version: [],
+      by_domain: [],
+    };
   }
 
   const byPlugin = await db
@@ -226,6 +233,25 @@ export async function summary(env, activeSince) {
     )
     .all();
 
+  // Per-domain view: which sites run which plugins, on what version, where,
+  // and when they were last seen. Grouped per domain so the dashboard shows
+  // one row per site, with the plugins/versions collapsed into a list.
+  const byDomain = await db
+    .prepare(
+      `SELECT domain,
+              GROUP_CONCAT(DISTINCT plugin)  AS plugins,
+              GROUP_CONCAT(DISTINCT version) AS versions,
+              MAX(country)                   AS country,
+              MIN(last_seen)                 AS first_seen,
+              MAX(last_seen)                 AS last_seen,
+              SUM(count)                     AS checkins
+         FROM checkins
+        WHERE domain <> ''
+        GROUP BY domain
+        ORDER BY last_seen DESC`
+    )
+    .all();
+
   const activeSites = await db
     .prepare(
       `SELECT COUNT(DISTINCT domain) AS n
@@ -245,6 +271,7 @@ export async function summary(env, activeSince) {
     by_plugin: byPlugin?.results ?? [],
     by_country: byCountry?.results ?? [],
     by_version: byVersion?.results ?? [],
+    by_domain: byDomain?.results ?? [],
   };
 }
 

@@ -226,6 +226,22 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
     .map((r) => `<tr><td>${esc(r.plugin)}</td><td>${esc(r.version || '')}</td><td>${r.sites}</td></tr>`)
     .join('');
 
+  const domainRows = data.by_domain
+    .map((r) => {
+      const plugins = String(r.plugins || '').split(',').filter(Boolean).map(esc).join(', ');
+      const versions = String(r.versions || '').split(',').filter(Boolean).map(esc).join(', ');
+      return `<tr>
+        <td class="mono">${esc(r.domain)}</td>
+        <td>${plugins || '<em>&mdash;</em>'}</td>
+        <td>${versions || '<em>&mdash;</em>'}</td>
+        <td>${esc(r.country || '??')}</td>
+        <td class="mono">${fmtTime(r.first_seen)}</td>
+        <td class="mono">${fmtTime(r.last_seen)}</td>
+        <td>${Number(r.checkins) || 0}</td>
+      </tr>`;
+    })
+    .join('');
+
   const licenseRows = licenses
     .map((l) => {
       const domains = Object.keys(l.domains || {});
@@ -253,6 +269,13 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
     <h2>Installs by plugin</h2>
     <table><thead><tr><th>Plugin</th><th>Sites</th><th>Check-ins</th></tr></thead>
     <tbody>${pluginRows || '<tr><td colspan="3"><em>No data yet.</em></td></tr>'}</tbody></table>
+
+    <h2>Sites by domain</h2>
+    <table><thead><tr>
+      <th>Domain</th><th>Plugins</th><th>Versions</th><th>Country</th>
+      <th>First seen</th><th>Last seen</th><th>Check-ins</th>
+    </tr></thead>
+    <tbody>${domainRows || '<tr><td colspan="7"><em>No data yet.</em></td></tr>'}</tbody></table>
 
     <h2>Sites by country</h2>
     <table><thead><tr><th>Country</th><th>Sites</th></tr></thead>
@@ -382,6 +405,12 @@ async function readForm(request) {
  * @param {string} s
  * @returns {string}
  */
+function fmtTime(unixSec) {
+  const n = Number(unixSec);
+  if (!n) return '\u2014';
+  return new Date(n * 1000).toISOString().replace('T', ' ').slice(0, 16);
+}
+
 function esc(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')
