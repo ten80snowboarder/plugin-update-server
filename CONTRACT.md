@@ -127,3 +127,39 @@ HTTP `200`:
 ```json
 { "ok": true, "time": 1735689600 }
 ```
+
+---
+
+## `GET /v1/admin/summary`
+
+Operator-only (guarded by `ADMIN_TOKEN`). Aggregate usage JSON for the
+dashboard. Requires a valid bearer token or admin session cookie.
+
+```json
+{
+  "ok": true,
+  "generated_at": 1735689600,
+  "active_window": 2592000,
+  "installs": 3,
+  "active_sites": 1,
+  "by_plugin":  [{ "plugin": "cfdump", "sites": 1, "checkins": 5 }],
+  "by_country": [{ "country": "US", "sites": 1 }],
+  "by_version": [{ "plugin": "cfdump", "version": "1.5.4", "sites": 1 }],
+  "by_domain":  [{
+    "domain": "example.com",
+    "plugins": "cfdump,dawesome-name-generator",
+    "versions": "0.1.6,1.5.4",
+    "country": "US",
+    "first_seen": 1700000000,
+    "last_seen": 1700100000,
+    "checkins": 5
+  }]
+}
+```
+
+Notes:
+
+* `by_domain` is one row per site (domain), with the plugins/versions it runs
+  collapsed into comma-separated lists. Domains seen only in older check-ins
+  (before clients sent `site`) have an empty `domain` and are excluded here.
+* Counts are distinct **domains** (sites), not check-ins, except `checkins`.
