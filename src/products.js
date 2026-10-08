@@ -21,7 +21,7 @@ export const PRODUCTS = {
     homepage: 'https://toballydawes.com/',
     asset_pattern: 'dawesome-name-generator',
     requires: '6.3',
-    tested: '6.7',
+    tested: '7.1.3',
     requires_php: '8.1',
     key_prefix: 'DNG',
     description:
@@ -32,7 +32,7 @@ export const PRODUCTS = {
     homepage: 'https://toballydawes.com/',
     asset_pattern: 'cfdump',
     requires: '6.3',
-    tested: '7.1',
+    tested: '7.1.3',
     requires_php: '8.2',
     key_prefix: 'CFD',
     description:
