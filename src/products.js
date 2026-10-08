@@ -12,6 +12,8 @@
 // `tested`          WordPress version the release is tested against.
 // `requires_php`    Minimum PHP version.
 // `description`     Short blurb shown in the details modal.
+// `key_prefix`      Prefix used when minting licence keys for this product
+//                   (e.g. "DNG" -> DNG-XXXX-XXXX-XXXX). Must be unique.
 
 export const PRODUCTS = {
   'dawesome-name-generator': {
@@ -21,6 +23,7 @@ export const PRODUCTS = {
     requires: '6.3',
     tested: '6.7',
     requires_php: '8.1',
+    key_prefix: 'DNG',
     description:
       'A configurable name / insult generator. Define your own word banks and background images to produce shareable name cards.',
   },
@@ -31,6 +34,7 @@ export const PRODUCTS = {
     requires: '6.3',
     tested: '7.1',
     requires_php: '8.2',
+    key_prefix: 'CFD',
     description:
       'A simple plugin to add functionality like CFDUMP in ColdFusion/CFML.',
   },
@@ -47,4 +51,15 @@ export function getProduct(slug) {
     return null;
   }
   return Object.prototype.hasOwnProperty.call(PRODUCTS, slug) ? PRODUCTS[slug] : null;
+}
+
+/**
+ * The licence-key prefix for a product slug.
+ *
+ * @param {string} slug
+ * @returns {string|null}
+ */
+export function getKeyPrefix(slug) {
+  const product = getProduct(slug);
+  return product?.key_prefix || null;
 }

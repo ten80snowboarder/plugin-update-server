@@ -12,8 +12,35 @@ compatibility_date = "2024-11-01"
 UPDATE_BASE_URL = "https://plugin-update-server.connectbench.com"
 DOWNLOAD_TTL = "300"
 
-# Optional KV namespace for a future licence store. Left commented so a fresh
-# deploy works with the static LICENSE_STORE secret alone.
-# [[kv_namespaces]]
-# binding = "LICENSES"
-# id = "REPLACE_WITH_KV_ID"
+# Sender address for transactional mail (must be verified in Postmark).
+# The Postmark *token* is a secret (POSTMARK_TOKEN), not stored here.
+POSTMARK_FROM = "connect@connectbench.com"
+
+# Operator address notified whenever a key is requested/issued.
+NOTIFY_EMAIL = "connect@connectbench.com"
+
+# How long (seconds) a site counts as "active" after its last check-in.
+# Default 30 days.
+ACTIVE_WINDOW = "2592000"
+
+# ---------------------------------------------------------------------------
+# D1 database — durable licence store, telemetry, requests, rate limiting.
+# Create once with:
+#   npx wrangler d1 create plugin-update-server
+# then paste the returned database_id below and apply schema.sql.
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "plugin-update-server"
+database_id = "1efffee3-9e9e-49af-8711-92dda47d6ea0"
+
+# ---------------------------------------------------------------------------
+# Secrets (set with `npx wrangler secret put <NAME>`), NOT stored here:
+#   GITHUB_TOKEN        fine-grained PAT for private repos
+#   SIGNING_SECRET      HMAC key for signed download URLs
+#   POSTMARK_TOKEN      Postmark Server API token
+#   ADMIN_TOKEN         bearer token guarding /admin and /v1/admin/*
+#
+# LICENSE_STORE is still read as a fallback if present, but D1 is the
+# authoritative store once populated (see src/licenses.js).
+# ---------------------------------------------------------------------------
