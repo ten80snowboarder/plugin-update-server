@@ -1,17 +1,37 @@
 // Cloudflare Worker entry point / router.
 //
-// Routes:
+// Public API (consumed by the WP plugin):
 //   GET /v1/health
-//   GET /v1/update?plugin=...&license=...&version=...&php=...&wp=...
+//   GET /v1/update?plugin=...&license=...&version=...&php=...&wp=...&site=...
 //   GET /v1/download/:token
+//
+// Public web flows (consumed by humans):
+//   GET  /request        key request form
+//   POST /request        submit a key request (auto-issue + email)
+//   GET  /recover        lost-key form
+//   POST /recover        email all keys on file for an address
+//
+// Operator-only (guarded by ADMIN_TOKEN):
+//   GET /admin                 dashboard (HTML)
+//   GET /v1/admin/summary      aggregates (JSON)
+//   GET /v1/admin/licenses     all licences (JSON)
 //
 // See CONTRACT.md for the JSON shapes.
 
 import { getProduct } from './products.js';
-import { lookupLicense } from './licenses.js';
+import { lookupLicense, lookupLicenseAsync } from './licenses.js';
 import { getLatestRelease, pickAsset, downloadAsset } from './github.js';
 import { createToken, verifyToken, isFresh } from './sign.js';
 import { json, softFail, hardFail, corsHeaders } from './responses.js';
+import { recordCheckin } from './telemetry.js';
+import { handleRequestForm, handleRecoverForm } from './public.js';
+import {
+  handleAdminPage,
+  handleAdminSummary,
+  handleAdminLicenses,
+  handleAdminLogin,
+  handleAdminLogout,
+} from './admin.js';
 
 /**
  * Read an env var with a default.
@@ -90,12 +110,14 @@ function changelogHtml(body) {
  *
  * @param {Request} request
  * @param {object} env
+ * @param {ExecutionContext} [ctx]
  * @returns {Promise<Response>}
  */
-export async function handleUpdate(request, env) {
+export async function handleUpdate(request, env, ctx) {
   const url = new URL(request.url);
   const plugin = url.searchParams.get('plugin') || '';
   const license = url.searchParams.get('license') || '';
+  const site = url.searchParams.get('site') || null;
 
   if (!plugin || !license) {
     return softFail('missing_params', 'Both "plugin" and "license" are required.');
@@ -107,9 +129,27 @@ export async function handleUpdate(request, env) {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const check = lookupLicense(license, plugin, env?.LICENSE_STORE, nowSec);
+  // `site` is passed so the licence lookup can enforce a domain lock when the
+  // record's mode is 'enforce'. In the default 'observe' mode it is ignored.
+  const check = await lookupLicenseAsync(license, plugin, env, nowSec, site);
   if (!check.ok) {
     return softFail(check.error, check.message);
+  }
+
+  // Fire-and-forget telemetry. Must never delay or fail the response.
+  const telemetry = recordCheckin(env, {
+    license,
+    plugin,
+    version: url.searchParams.get('version') || null,
+    site,
+    country: request.headers.get('CF-IPCountry') || null,
+    nowSec,
+  });
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(telemetry);
+  } else {
+    // No execution context (e.g. unit tests): don't await it either.
+    telemetry.catch(() => {});
   }
 
   const token = envStr(env, 'GITHUB_TOKEN');
@@ -217,36 +257,57 @@ export async function handleDownload(request, env, tokenStr) {
 }
 
 /**
- * Route a request to the correct handler and return a CORS-decorated response.
+ * Route a request to the correct handler.
  *
  * @param {Request} request
  * @param {object} env
+ * @param {ExecutionContext} [ctx]
  * @returns {Promise<Response>}
  */
-async function route(request, env) {
+async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
+  const method = request.method;
 
-  if (request.method === 'OPTIONS') {
+  if (method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
-  if (request.method !== 'GET') {
-    return hardFail(405, 'method_not_allowed', 'Only GET is supported.');
-  }
-
   let response;
-  if (path === '/v1/health') {
+
+  // --- Public web flows (GET form, POST submit) -------------------------
+  if (path === '/request') {
+    response = await handleRequestForm(request, env, ctx);
+  } else if (path === '/recover') {
+    response = await handleRecoverForm(request, env, ctx);
+
+    // --- Operator-only routes -------------------------------------------
+  } else if (path === '/admin' && method === 'GET') {
+    response = await handleAdminPage(request, env);
+  } else if (path === '/admin/login' && method === 'POST') {
+    response = await handleAdminLogin(request, env);
+  } else if (path === '/admin/logout' && method === 'POST') {
+    response = handleAdminLogout(request, env);
+  } else if (path === '/v1/admin/summary') {
+    response = await handleAdminSummary(request, env);
+  } else if (path === '/v1/admin/licenses') {
+    response = await handleAdminLicenses(request, env);
+
+    // --- Public API (WP plugin) -----------------------------------------
+  } else if (method !== 'GET') {
+    response = hardFail(405, 'method_not_allowed', 'Only GET is supported.');
+  } else if (path === '/v1/health') {
     response = json({ ok: true, time: Math.floor(Date.now() / 1000) });
   } else if (path === '/v1/update') {
-    response = await handleUpdate(request, env);
+    response = await handleUpdate(request, env, ctx);
   } else if (path.startsWith('/v1/download/')) {
     response = await handleDownload(request, env, path.slice('/v1/download/'.length));
   } else {
     response = hardFail(404, 'not_found', 'Unknown endpoint.');
   }
 
-  // Attach CORS headers (relevant for browser testing only).
+  // Attach CORS headers (relevant for browser testing only). HTML pages set
+  // their own content-type; we only merge CORS so we never clobber it.
   const headers = new Headers(response.headers);
   for (const [k, v] of Object.entries(corsHeaders())) {
     headers.set(k, v);
@@ -264,6 +325,8 @@ async function route(request, env) {
  * unambiguous.
  */
 export default {
-  fetch: route,
+  fetch(request, env, ctx) {
+    return route(request, env, ctx);
+  },
 };
 
