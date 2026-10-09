@@ -63,6 +63,13 @@ committed to a release yet.
 
 ## Housekeeping
 
+- [x] **Public download endpoint** — `GET /v1/latest/:product[.zip]` (+ `/info`
+  JSON) serves the current release with no licence, for the blog's Download
+  button. Licence gates updates, not the code. (`src/latest.js`)
+- [ ] **Update the blog page** at toby dawes.com/wordpress-plugins/cfdump/ —
+  keep the version line current and point the Download button at
+  `/v1/latest/cfdump.zip`. Optionally auto-fill the version via a small
+  `/info` fetch.
 - [ ] **Plugin-side styling** of the licence-screen CTAs (small enqueued CSS,
   wrapper class) — deferred from the DNG/CFDUMP release.
 - [ ] Consider a **CONTRACT.md** refresh if admin endpoints change.

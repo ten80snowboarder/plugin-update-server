@@ -23,6 +23,20 @@ download URL** (HMAC), so the private asset URL is never reusable.
 | `GET` | `/v1/download/:token` | Streams the signed release asset (single use, TTL). |
 | `GET` | `/v1/health` | Liveness probe. |
 
+### Public latest download (no licence — for blogs / direct download)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/v1/latest/:product` | `302` redirect to the current release zip. |
+| `GET` | `/v1/latest/:product.zip` | Same (`.zip` suffix is convenient for a button `href`). |
+| `GET` | `/v1/latest/:product/info` | JSON `{version, published_at, download_url, requires…}`. |
+
+These are intentionally unauthenticated: a licence gates **automatic updates**,
+not the code itself. A blog's "Download" button can simply link to
+`/v1/latest/cfdump.zip` and always get the current version. The redirect target
+is the same short-lived signed URL the plugin uses, so the private GitHub asset
+URL is never exposed.
+
 ### Public web flows (consumed by humans)
 
 | Method | Path | Purpose |
@@ -128,6 +142,7 @@ web/public_html/
     keys.js                Product-prefixed key generation
     email.js               Postmark transactional mail
     public.js              /request and /recover web flows
+    latest.js              Public /v1/latest/:product download endpoints
     admin.js               /admin dashboard + /v1/admin/* JSON
     theme.js               Shared visual shell + stylesheet (topbar, cards, tables)
     session.js             Signed admin session cookies
@@ -139,6 +154,7 @@ web/public_html/
     telemetry.test.js      Keys + domain normalisation
     session.test.js        Session cookie flows
     public.test.js         /request + /recover flows (pre-fill, auto-issue, rate limits)
+    latest.test.js         /v1/latest/:product redirect + info endpoints
     theme.test.js          Shared shell + escaping
   CONTRACT.md              JSON contract shared with the plugin
 ```
