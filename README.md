@@ -29,13 +29,58 @@ download URL** (HMAC), so the private asset URL is never reusable.
 | --- | --- | --- |
 | `GET` | `/v1/latest/:product` | `302` redirect to the current release zip. |
 | `GET` | `/v1/latest/:product.zip` | Same (`.zip` suffix is convenient for a button `href`). |
-| `GET` | `/v1/latest/:product/info` | JSON `{version, published_at, download_url, requires…}`. |
+| `GET` | `/v1/latest/:product/info` | JSON with version, date, download URL and stats. |
 
 These are intentionally unauthenticated: a licence gates **automatic updates**,
 not the code itself. A blog's "Download" button can simply link to
 `/v1/latest/cfdump.zip` and always get the current version. The redirect target
 is the same short-lived signed URL the plugin uses, so the private GitHub asset
 URL is never exposed.
+
+Each hit on these endpoints is counted fire-and-forget (see **latest_events**
+below); the redirect is never slowed by the write.
+
+#### `GET /v1/latest/:product/info`
+
+```json
+{
+  "product": "cfdump",
+  "version": "1.5.6",
+  "published_at": "2026-10-08 23:37:53",
+  "download_url": "https://…/v1/download/<signed-token>",
+  "homepage": "https://example.com/",
+  "requires": "6.3",
+  "tested": "7.1.3",
+  "requires_php": "8.2",
+  "downloads": 1,
+  "downloads_30d": 1,
+  "active_sites": 2
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Latest release tag, leading `v` stripped. |
+| `published_at` | Release date, `YYYY-MM-DD HH:MM:SS` (UTC). |
+| `download_url` | A fresh **short-lived signed** `/v1/download/…` URL (≈`DOWNLOAD_TTL`). **Do not cache or embed this on a page** — it expires. Link to the stable `/v1/latest/:product.zip` instead. |
+| `requires` / `tested` / `requires_php` | From the product registry (WP min, WP tested, PHP min). |
+| `downloads` | Total clicks on `/v1/latest/:product(.zip)` — all time. |
+| `downloads_30d` | Same, last 30 days. |
+| `active_sites` | DISTINCT domains that checked in within `ACTIVE_WINDOW` (default 30 days). |
+| `homepage` | From the product registry. |
+
+Stats are read **before** the current request is recorded, so the figures
+returned don't include the call that fetched them.
+
+**Interpreting the counts** (they measure different things):
+
+* `downloads` is the **Download button was clicked** — a good proxy, but not a
+  guaranteed completed download (redirects, link-preview bots and repeat clicks
+  can nudge it up; the worker never sees the asset bytes, GitHub serves those).
+* `active_sites` counts sites that **phone home on an update check**. Only
+  installs **with a licence** check in, so this is *active licensed installs*,
+  **not** total installs — a site that downloads the zip and never enters a key
+  isn't counted. This matches the "licence gates updates" model.
 
 ### Public web flows (consumed by humans)
 
@@ -103,6 +148,20 @@ which country) so the operator can see where each plugin is installed. It is
   `site_mismatch` / `site_required`. Bind a domain by issuing/recovering the key
   for that domain, or by its first successful check-in. No migration needed.
 
+## Public download counts
+
+Hits on the public `/v1/latest/*` endpoints are recorded in the
+**`latest_events`** table (one row per hit: product, kind, version, country,
+time), also fire-and-forget. Two kinds are stored:
+
+* `kind='info'` — a fetch of `/v1/latest/:product/info`. When a blog caches the
+  rendered page (e.g. via a shortcode + LiteSpeed), this is roughly **one hit
+  per cache refresh**, not per visitor.
+* `kind='download'` — a click on `/v1/latest/:product(.zip)`.
+
+Aggregated per product/kind in the dashboard's **Public downloads** panel, and
+surfaced per-product as `downloads` / `downloads_30d` in the `/info` response.
+
 ## Admin
 
 `/admin` is protected by a **signed, `HttpOnly`, `Secure`, `SameSite=Strict`
@@ -131,7 +190,7 @@ If `ADMIN_TOKEN` is unset, all admin routes return `503 admin_disabled`.
 ```
 web/public_html/
   wrangler.toml            Cloudflare Worker config
-  schema.sql               D1 schema (licenses, checkins, requests, rate_events)
+  schema.sql               D1 schema (licenses, checkins, requests, rate_events, latest_events)
   package.json             Dev deps (wrangler, vitest)
   src/
     index.js               Router + handlers
