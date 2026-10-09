@@ -1,0 +1,43 @@
+{
+  // VS Code tasks for local theme work on the Plugin Update Server.
+  //
+  // Usage:
+  //   1. Run the "PUS: dev server" task once (Terminal ▸ Run Task).
+  //   2. Run "PUS: open request form", "PUS: open recover form" or
+  //      "PUS: open admin" to pop the live page into VS Code's Simple Browser.
+  //
+  // The server proxy uses the built-in ${input} so the port matches dev.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "PUS: dev server",
+      "type": "shell",
+      "command": "npx wrangler dev --port 8787",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "pus", "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "PUS: open request form",
+      "type": "shell",
+      "command": "open -a 'Google Chrome' 'http://localhost:8787/request?plugin=cfdump&domain=example.com&name=My%20Site&ref=CFDUMP' || open 'http://localhost:8787/request?plugin=cfdump&domain=example.com&name=My%20Site&ref=CFDUMP'",
+      "problemMatcher": [],
+      "presentation": { "group": "pus", "panel": "shared", "reveal": "silent" }
+    },
+    {
+      "label": "PUS: open recover form",
+      "type": "shell",
+      "command": "open -a 'Google Chrome' 'http://localhost:8787/recover' || open 'http://localhost:8787/recover'",
+      "problemMatcher": [],
+      "presentation": { "group": "pus", "panel": "shared", "reveal": "silent" }
+    },
+    {
+      "label": "PUS: open admin",
+      "type": "shell",
+      "command": "open -a 'Google Chrome' 'http://localhost:8787/admin' || open 'http://localhost:8787/admin'",
+      "problemMatcher": [],
+      "presentation": { "group": "pus", "panel": "shared", "reveal": "silent" }
+    }
+  ]
+}
