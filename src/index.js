@@ -5,6 +5,11 @@
 //   GET /v1/update?plugin=...&license=...&version=...&php=...&wp=...&site=...
 //   GET /v1/download/:token
 //
+// Public API (no licence — for blogs / direct downloads):
+//   GET /v1/latest/:product        -> 302 to the current release zip
+//   GET /v1/latest/:product.zip    -> same (convenient for a Download button)
+//   GET /v1/latest/:product/info   -> JSON { version, published_at, download_url, ... }
+//
 // Public web flows (consumed by humans):
 //   GET  /request        key request form
 //   POST /request        submit a key request (auto-issue + email)
@@ -24,6 +29,7 @@ import { getLatestRelease, pickAsset, downloadAsset } from './github.js';
 import { createToken, verifyToken, isFresh } from './sign.js';
 import { json, softFail, hardFail, corsHeaders } from './responses.js';
 import { recordCheckin } from './telemetry.js';
+import { handleLatest } from './latest.js';
 import { handleRequestForm, handleRecoverForm } from './public.js';
 import {
   handleAdminPage,
@@ -300,6 +306,8 @@ async function route(request, env, ctx) {
     response = json({ ok: true, time: Math.floor(Date.now() / 1000) });
   } else if (path === '/v1/update') {
     response = await handleUpdate(request, env, ctx);
+  } else if (path.startsWith('/v1/latest/')) {
+    response = await handleLatest(request, env, path.slice('/v1/latest/'.length));
   } else if (path.startsWith('/v1/download/')) {
     response = await handleDownload(request, env, path.slice('/v1/download/'.length));
   } else {
