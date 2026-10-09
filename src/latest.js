@@ -22,7 +22,7 @@
 import { getProduct } from './products.js';
 import { getLatestRelease, pickAsset } from './github.js';
 import { createToken } from './sign.js';
-import { recordLatestEvent } from './db.js';
+import { recordLatestEvent, productStats } from './db.js';
 import { json, softFail, hardFail } from './responses.js';
 
 /**
@@ -139,9 +139,18 @@ export async function handleLatest(request, env, rest, ctx) {
     return hardFail(resolved.status, resolved.error, resolved.message);
   }
 
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // For /info, gather stats BEFORE recording this hit, so the numbers the
+  // caller sees don't include the very request that fetched them.
+  let stats = null;
+  if (wantsInfo) {
+    const windowSec = parseInt(envStr(env, 'ACTIVE_WINDOW', '2592000'), 10) || 2592000;
+    stats = await productStats(env, slug, nowSec - windowSec);
+  }
+
   // Count the hit (fire-and-forget). 'info' ~= a blog cache refresh;
   // 'download' ~= an actual click on the Download button.
-  const nowSec = Math.floor(Date.now() / 1000);
   schedule(
     ctx,
     recordLatestEvent(env, {
@@ -163,6 +172,11 @@ export async function handleLatest(request, env, rest, ctx) {
       requires: resolved.product.requires || '',
       tested: resolved.product.tested || '',
       requires_php: resolved.product.requires_php || '',
+      // Public stats. See db.productStats() for the caveat that
+      // `active_sites` counts licensed installs (only they check in).
+      downloads: stats.downloads,
+      downloads_30d: stats.downloads_30d,
+      active_sites: stats.active_sites,
     });
   }
 

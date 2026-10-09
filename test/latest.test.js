@@ -18,14 +18,25 @@ function env() {
     UPDATE_BASE_URL: 'https://updates.example.com',
     DOWNLOAD_TTL: '300',
     __events: [],
+    __stats: { downloads: 11, downloads_30d: 4, active_sites: 3 },
   };
   e.DB = {
     prepare(sql) {
-      return {
-        bind(...args) {
-          return { run: async () => { e.__events.push({ sql, args }); } };
+      const stmt = {
+        _args: [],
+        bind(...args) { stmt._args = args; return stmt; },
+        async run() { e.__events.push({ sql, args: stmt._args }); },
+        async first() {
+          // productStats: downloads / downloads_30d / active_sites.
+          if (/FROM latest_events/i.test(sql)) {
+            return { n: /created_at >=/i.test(sql) ? e.__stats.downloads_30d : e.__stats.downloads };
+          }
+          if (/FROM checkins/i.test(sql)) return { n: e.__stats.active_sites };
+          return null;
         },
+        async all() { return { results: [] }; },
       };
+      return stmt;
     },
   };
   return e;
@@ -123,6 +134,10 @@ describe('GET /v1/latest/:product/info', () => {
     expect(body.published_at).toBe('2026-09-22 09:30:00');
     expect(body.download_url).toContain('/v1/download/');
     expect(body.requires_php).toBe('8.2');
+    // Public stats are included.
+    expect(body.downloads).toBe(11);
+    expect(body.downloads_30d).toBe(4);
+    expect(body.active_sites).toBe(3);
   });
 
   it('records an "info" event (blog cache refresh)', async () => {

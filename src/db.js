@@ -439,3 +439,55 @@ export async function latestEventCounts(env, sinceSec) {
     .all();
   return res?.results ?? [];
 }
+
+/**
+ * Public-ish stats for a single product: download-link clicks and active
+ * (checking-in) sites.
+ *
+ * NOTE on semantics:
+ *   * download count = clicks on /v1/latest/:product(.zip). A click isn't a
+ *     guaranteed completed download (redirects/bots inflate slightly).
+ *   * active sites  = DISTINCT domains that checked in within the window.
+ *     Only LICENSED installs phone home, so this is "active licensed
+ *     installs", not total downloads.
+ *
+ * @param {object} env
+ * @param {string} product
+ * @param {number} activeSinceSec  Check-ins after this count as "active".
+ * @returns {Promise<{downloads:number, downloads_30d:number, active_sites:number}>}
+ */
+export async function productStats(env, product, activeSinceSec) {
+  const db = getDb(env);
+  if (!db) return { downloads: 0, downloads_30d: 0, active_sites: 0 };
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const since30d = nowSec - 30 * 86400;
+
+  const downloads = await db
+    .prepare(`SELECT COUNT(*) AS n FROM latest_events WHERE product = ? AND kind = 'download'`)
+    .bind(product)
+    .first();
+
+  const downloads30 = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM latest_events
+        WHERE product = ? AND kind = 'download' AND created_at >= ?`
+    )
+    .bind(product, since30d)
+    .first();
+
+  const active = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT domain) AS n
+         FROM checkins
+        WHERE plugin = ? AND domain <> '' AND last_seen >= ?`
+    )
+    .bind(product, activeSinceSec)
+    .first();
+
+  return {
+    downloads: downloads?.n ?? 0,
+    downloads_30d: downloads30?.n ?? 0,
+    active_sites: active?.n ?? 0,
+  };
+}
