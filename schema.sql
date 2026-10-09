@@ -66,3 +66,20 @@ CREATE TABLE IF NOT EXISTS rate_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rate_events ON rate_events(bucket, created_at);
+
+-- Hits on the public /v1/latest/* endpoints. One row per hit, so we can see
+-- how often the blog's shortcode refreshes (kind='info') vs. how often people
+-- actually click Download (kind='download'). Written fire-and-forget so it can
+-- never delay or fail a download redirect. Caller IP is NOT stored — just a
+-- coarse country, to keep this lightweight and privacy-safe.
+CREATE TABLE IF NOT EXISTS latest_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  product    TEXT NOT NULL,               -- e.g. "cfdump"
+  kind       TEXT NOT NULL,               -- 'info' | 'download'
+  version    TEXT,                        -- version resolved at the time
+  country    TEXT,                        -- from CF-IPCountry header
+  created_at INTEGER NOT NULL             -- unix seconds
+);
+
+CREATE INDEX IF NOT EXISTS idx_latest_events_product ON latest_events(product, created_at);
+CREATE INDEX IF NOT EXISTS idx_latest_events_created ON latest_events(created_at);

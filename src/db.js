@@ -392,3 +392,50 @@ function safeJson(raw, fallback) {
     return fallback;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Latest-download events (/v1/latest/*)
+// ---------------------------------------------------------------------------
+
+/**
+ * Record a hit on a public /v1/latest/* endpoint.
+ *
+ * @param {object} env
+ * @param {{product:string, kind:'info'|'download', version?:string|null,
+ *          country?:string|null, nowSec:number}} e
+ * @returns {Promise<void>}
+ */
+export async function recordLatestEvent(env, e) {
+  const db = getDb(env);
+  if (!db) return;
+  await db
+    .prepare(
+      `INSERT INTO latest_events (product, kind, version, country, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .bind(e.product, e.kind, e.version ?? null, e.country ?? null, e.nowSec)
+    .run();
+}
+
+/**
+ * Counts of latest-events per product/kind within a window (for the admin).
+ *
+ * @param {object} env
+ * @param {number} sinceSec
+ * @returns {Promise<Array<{product:string, kind:string, hits:number}>>}
+ */
+export async function latestEventCounts(env, sinceSec) {
+  const db = getDb(env);
+  if (!db) return [];
+  const res = await db
+    .prepare(
+      `SELECT product, kind, COUNT(*) AS hits
+         FROM latest_events
+        WHERE created_at >= ?
+        GROUP BY product, kind
+        ORDER BY product, kind`
+    )
+    .bind(sinceSec)
+    .all();
+  return res?.results ?? [];
+}

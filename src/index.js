@@ -307,7 +307,7 @@ async function route(request, env, ctx) {
   } else if (path === '/v1/update') {
     response = await handleUpdate(request, env, ctx);
   } else if (path.startsWith('/v1/latest/')) {
-    response = await handleLatest(request, env, path.slice('/v1/latest/'.length));
+    response = await handleLatest(request, env, path.slice('/v1/latest/'.length), ctx);
   } else if (path.startsWith('/v1/download/')) {
     response = await handleDownload(request, env, path.slice('/v1/download/'.length));
   } else {

@@ -2,19 +2,33 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { handleLatest } from '../src/latest.js';
 import { verifyToken } from '../src/sign.js';
 
-/** Call handleLatest with a request + the path segment after /v1/latest/. */
+/** Call handleLatest with a request + path segment, returning { res, ctx }. */
 function callLatest(rest, e = env()) {
-  return handleLatest(new Request(`https://updates.example.com/v1/latest/${rest}`), e, rest);
+  const waits = [];
+  const ctx = { waitUntil: (p) => waits.push(p) };
+  const promise = handleLatest(new Request(`https://updates.example.com/v1/latest/${rest}`), e, rest, ctx);
+  return { promise, waits, env: e };
 }
 
-/** Minimal env for a happy-path resolve. */
+/** Minimal env for a happy-path resolve, with a fake D1 that records SQL. */
 function env() {
-  return {
+  const e = {
     GITHUB_TOKEN: 'ghp_test',
     SIGNING_SECRET: 's3cret',
     UPDATE_BASE_URL: 'https://updates.example.com',
     DOWNLOAD_TTL: '300',
+    __events: [],
   };
+  e.DB = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return { run: async () => { e.__events.push({ sql, args }); } };
+        },
+      };
+    },
+  };
+  return e;
 }
 
 /** Stub global fetch to return a canned GitHub latest-release payload. */
@@ -32,7 +46,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('GET /v1/latest/:product', () => {
   it('302-redirects to a signed download URL for the latest zip', async () => {
     stubRelease([{ id: 42, name: 'cfdump.zip', url: 'https://api.github.com/repos/o/r/releases/assets/42' }]);
-    const res = await callLatest('cfdump');
+    const res = await callLatest('cfdump').promise;
     expect(res.status).toBe(302);
 
     const loc = res.headers.get('location');
@@ -48,7 +62,7 @@ describe('GET /v1/latest/:product', () => {
 
   it('accepts a .zip suffix (convenient for a Download button)', async () => {
     stubRelease([{ id: 7, name: 'cfdump.zip', url: 'https://api.github.com/repos/o/r/releases/assets/7' }]);
-    const res = await callLatest('cfdump.zip');
+    const res = await callLatest('cfdump.zip').promise;
     expect(res.status).toBe(302);
   });
 
@@ -57,22 +71,40 @@ describe('GET /v1/latest/:product', () => {
       { id: 1, name: 'something-else.zip', url: 'https://api.github.com/repos/o/r/releases/assets/1' },
       { id: 2, name: 'cfdump.zip', url: 'https://api.github.com/repos/o/r/releases/assets/2' },
     ]);
-    const res = await callLatest('cfdump');
+    const res = await callLatest('cfdump').promise;
     const payload = await verifyToken(res.headers.get('location').split('/v1/download/')[1], 's3cret');
     expect(payload.asset_id).toBe(2);
   });
 
   it('404s for an unknown product', async () => {
-    const res = await callLatest('ghost');
+    const res = await callLatest('ghost').promise;
     expect(res.status).toBe(404);
     expect((await res.json()).error).toBe('unknown_product');
   });
 
   it('404s when the release has no zip asset', async () => {
     stubRelease([{ id: 1, name: 'notes.txt', url: 'https://api.github.com/repos/o/r/releases/assets/1' }]);
-    const res = await callLatest('cfdump');
+    const res = await callLatest('cfdump').promise;
     expect(res.status).toBe(404);
     expect((await res.json()).error).toBe('no_release');
+  });
+
+  it('records a download event (fire-and-forget) with the resolved version', async () => {
+    stubRelease([{ id: 9, name: 'cfdump.zip', url: 'https://api.github.com/repos/o/r/releases/assets/9' }], {
+      tag: 'v1.5.6',
+    });
+    const { promise, waits, env: e } = callLatest('cfdump.zip');
+    await promise;
+
+    // The count is scheduled via ctx.waitUntil, not awaited by the response.
+    expect(waits).toHaveLength(1);
+    await Promise.all(waits);
+
+    expect(e.__events).toHaveLength(1);
+    const [product, kind, version] = e.__events[0].args;
+    expect(product).toBe('cfdump');
+    expect(kind).toBe('download');
+    expect(version).toBe('1.5.6');
   });
 });
 
@@ -82,7 +114,7 @@ describe('GET /v1/latest/:product/info', () => {
       tag: 'v1.4.14',
       published: '2026-09-22T09:30:00Z',
     });
-    const res = await callLatest('cfdump/info');
+    const res = await callLatest('cfdump/info').promise;
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -91,5 +123,13 @@ describe('GET /v1/latest/:product/info', () => {
     expect(body.published_at).toBe('2026-09-22 09:30:00');
     expect(body.download_url).toContain('/v1/download/');
     expect(body.requires_php).toBe('8.2');
+  });
+
+  it('records an "info" event (blog cache refresh)', async () => {
+    stubRelease([{ id: 42, name: 'cfdump.zip', url: 'https://api.github.com/repos/o/r/releases/assets/42' }]);
+    const { promise, waits, env: e } = callLatest('cfdump/info');
+    await promise;
+    await Promise.all(waits);
+    expect(e.__events[0].args[1]).toBe('info');
   });
 });

@@ -14,7 +14,7 @@
 // If ADMIN_TOKEN is unset, all admin routes are hard-disabled (503) rather
 // than left open.
 
-import { listLicenses, summary } from './db.js';
+import { listLicenses, summary, latestEventCounts } from './db.js';
 import { json, hardFail } from './responses.js';
 import { shell, esc } from './theme.js';
 import {
@@ -137,12 +137,13 @@ export async function handleAdminPage(request, env) {
   const nowSec = Math.floor(Date.now() / 1000);
   const windowSec = parseInt(env?.ACTIVE_WINDOW || '2592000', 10) || 2592000;
 
-  const [data, licenses] = await Promise.all([
+  const [data, licenses, latest] = await Promise.all([
     summary(env, nowSec - windowSec),
     listLicenses(env),
+    latestEventCounts(env, nowSec - windowSec),
   ]);
 
-  return htmlPage(renderDashboard({ data, licenses, windowSec, nowSec }));
+  return htmlPage(renderDashboard({ data, licenses, latest, windowSec, nowSec }));
 }
 
 /**
@@ -204,7 +205,7 @@ export function handleAdminLogout(request, env) {
  * @param {object} o
  * @returns {string}
  */
-function renderDashboard({ data, licenses, windowSec, nowSec }) {
+function renderDashboard({ data, licenses, latest = [], windowSec, nowSec }) {
   const days = Math.round(windowSec / 86400);
 
   const tiles = `
@@ -214,6 +215,16 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
       ${tile('Plugins', data.by_plugin.length)}
       ${tile('Countries', data.by_country.length)}
     </div>`;
+
+  // Public /v1/latest/* hits: 'info' (blog cache refresh) + 'download' (clicks).
+  const downloadRows = latest
+    .map((r) => {
+      const kindBadge = r.kind === 'download'
+        ? `<span class="badge badge--brand">download</span>`
+        : `<span class="badge badge--muted">${esc(r.kind)}</span>`;
+      return `<tr><td>${esc(r.product)}</td><td>${kindBadge}</td><td>${Number(r.hits) || 0}</td></tr>`;
+    })
+    .join('');
 
   const pluginRows = data.by_plugin
     .map((r) => `<tr><td>${esc(r.plugin)}</td><td>${r.sites}</td><td>${r.checkins}</td></tr>`)
@@ -307,6 +318,11 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
       <div class="card">
         <div class="card__head">Sites by version</div>
         ${table('<th>Plugin</th><th>Version</th><th>Sites</th>', versionRows, 3)}
+      </div>
+
+      <div class="card">
+        <div class="card__head">Public downloads <span class="count">${days}d</span></div>
+        ${table('<th>Product</th><th>Kind</th><th>Hits</th>', downloadRows, 3)}
       </div>
 
       <div class="card">

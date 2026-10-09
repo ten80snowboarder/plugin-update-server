@@ -22,7 +22,21 @@
 import { getProduct } from './products.js';
 import { getLatestRelease, pickAsset } from './github.js';
 import { createToken } from './sign.js';
+import { recordLatestEvent } from './db.js';
 import { json, softFail, hardFail } from './responses.js';
+
+/**
+ * Fire-and-forget event recording. Never delays or fails the response.
+ *
+ * @param {ExecutionContext|undefined} ctx
+ * @param {Promise<*>} p
+ */
+function schedule(ctx, p) {
+  const guarded = p.catch(() => {});
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(guarded);
+  }
+}
 
 /**
  * Read an env var with a default.
@@ -105,9 +119,10 @@ async function resolveLatest(env, productSlug, origin) {
  * @param {Request} request
  * @param {object} env
  * @param {string} rest  The path segment after /v1/latest/ (e.g. "cfdump" or "cfdump/info").
+ * @param {ExecutionContext} [ctx]
  * @returns {Promise<Response>}
  */
-export async function handleLatest(request, env, rest) {
+export async function handleLatest(request, env, rest, ctx) {
   const origin = new URL(request.url).origin;
 
   // Split "cfdump/info" or "cfdump.zip".
@@ -124,6 +139,20 @@ export async function handleLatest(request, env, rest) {
     return hardFail(resolved.status, resolved.error, resolved.message);
   }
 
+  // Count the hit (fire-and-forget). 'info' ~= a blog cache refresh;
+  // 'download' ~= an actual click on the Download button.
+  const nowSec = Math.floor(Date.now() / 1000);
+  schedule(
+    ctx,
+    recordLatestEvent(env, {
+      product: slug,
+      kind: wantsInfo ? 'info' : 'download',
+      version: resolved.version,
+      country: request.headers.get('CF-IPCountry') || null,
+      nowSec,
+    })
+  );
+
   if (wantsInfo) {
     return json({
       product: slug,
@@ -138,7 +167,9 @@ export async function handleLatest(request, env, rest) {
   }
 
   // A real 302 to the signed asset URL: the blog's Download button just links
-  // here, and the browser follows the redirect.
+  // here, and the browser follows the redirect. We short-cache the redirect so
+  // a burst of clicks doesn't hammer the worker, while still minting a token
+  // comfortably inside its TTL.
   return new Response(null, {
     status: 302,
     headers: {
