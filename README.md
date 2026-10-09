@@ -129,6 +129,7 @@ web/public_html/
     email.js               Postmark transactional mail
     public.js              /request and /recover web flows
     admin.js               /admin dashboard + /v1/admin/* JSON
+    theme.js               Shared visual shell + stylesheet (topbar, cards, tables)
     session.js             Signed admin session cookies
     github.js              GitHub API client (release lookup)
     sign.js                HMAC sign/verify for tokens + sessions
@@ -138,6 +139,7 @@ web/public_html/
     telemetry.test.js      Keys + domain normalisation
     session.test.js        Session cookie flows
     public.test.js         /request + /recover flows (pre-fill, auto-issue, rate limits)
+    theme.test.js          Shared shell + escaping
   CONTRACT.md              JSON contract shared with the plugin
 ```
 

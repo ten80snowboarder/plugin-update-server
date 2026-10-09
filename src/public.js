@@ -13,6 +13,7 @@
 import { getProduct, PRODUCTS } from './products.js';
 import { generateKey } from './keys.js';
 import { normaliseDomain } from './telemetry.js';
+import { shell, esc } from './theme.js';
 import {
   insertLicense,
   insertRequest,
@@ -302,26 +303,6 @@ function html(body, status = 200) {
   });
 }
 
-const STYLE = `
-  :root { color-scheme: light dark; }
-  body { font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         max-width: 34rem; margin: 3rem auto; padding: 0 1.25rem; }
-  h1 { font-size: 1.35rem; }
-  label { display: block; margin: 1rem 0 .25rem; font-weight: 600; font-size: .9rem; }
-  input, select { width: 100%; box-sizing: border-box; padding: .55rem .7rem; font: inherit;
-                  border: 1px solid #8886; border-radius: 8px; background: transparent; color: inherit; }
-  .hint { font-size: .8rem; opacity: .7; margin-top: .25rem; }
-  button { margin-top: 1.25rem; padding: .6rem 1.1rem; font: inherit; font-weight: 600;
-           border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
-  .err { background: #dc2626 1a; border: 1px solid #dc2626; color: #dc2626;
-         padding: .6rem .8rem; border-radius: 8px; margin: 1rem 0; }
-  .ok { background: #16a34a 1a; border: 1px solid #16a34a; padding: .8rem 1rem;
-        border-radius: 8px; margin: 1rem 0; }
-  .key { font-family: ui-monospace, monospace; font-size: 1.05rem; background: #8882;
-         padding: .5rem .7rem; border-radius: 8px; display: inline-block; margin: .3rem 0; }
-  footer { margin-top: 2.5rem; opacity: .6; font-size: .8rem; }
-`;
-
 /**
  * @param {object} env
  * @param {object} o
@@ -330,29 +311,40 @@ const STYLE = `
 function requestPage(env, { error, values = {} } = {}) {
   const products = productOptions(values.plugin);
   const fromPlugin = values.ref
-    ? `<p class="hint">Opened from your ${esc(values.ref)} plugin — the details below were filled in for you.</p>`
+    ? `<div class="alert alert--info">Opened from your <strong>${esc(values.ref)}</strong> plugin &mdash; the details below were filled in for you.</div>`
     : '';
-  return page(
-    'Request a licence key',
-    `
-    ${error ? `<div class="err">${esc(error)}</div>` : ''}
-    ${fromPlugin}
-    <p>Enter your details and we'll email you a licence key for your site.</p>
-    <form method="post" action="/request">
-      <label for="email">Email <span aria-hidden="true">*</span></label>
-      <input id="email" name="email" type="email" required value="${esc(values.email || '')}">
-      <label for="domain">Domain <span aria-hidden="true">*</span></label>
-      <input id="domain" name="domain" type="text" required placeholder="example.com"
-             value="${esc(values.domain || '')}">
-      <div class="hint">The site where the plugin is installed, without http:// or www.</div>
-      <label for="plugin">Plugin <span aria-hidden="true">*</span></label>
-      <select id="plugin" name="plugin" required>${products}</select>
-      <label for="name">Name</label>
-      <input id="name" name="name" type="text" value="${esc(values.name || '')}">
-      <div class="hint">Optional.</div>
-      <button type="submit">Request key</button>
-    </form>`
-  );
+  const body = `
+    <div class="page-head">
+      <h1>Request a licence key</h1>
+      <p>Enter your details and we'll email you a licence key for your site.</p>
+    </div>
+    <div class="card">
+      <div class="card__body">
+        ${error ? `<div class="alert alert--err">${esc(error)}</div>` : ''}
+        ${fromPlugin}
+        <form method="post" action="/request">
+          <label for="email">Email <span class="req">*</span></label>
+          <input id="email" name="email" type="email" required value="${esc(values.email || '')}">
+
+          <label for="domain">Domain <span class="req">*</span></label>
+          <input id="domain" name="domain" type="text" required placeholder="example.com"
+                 value="${esc(values.domain || '')}">
+          <div class="hint">The site where the plugin is installed, without http:// or www.</div>
+
+          <label for="plugin">Plugin <span class="req">*</span></label>
+          <select id="plugin" name="plugin" required>${products}</select>
+
+          <label for="name">Name</label>
+          <input id="name" name="name" type="text" value="${esc(values.name || '')}">
+          <div class="hint">Optional.</div>
+
+          <div class="btn-row">
+            <button class="btn" type="submit">Request key</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  return shell({ title: 'Request a licence key', body, wrapClass: 'wrap--narrow' });
 }
 
 /**
@@ -363,15 +355,18 @@ function requestDonePage({ email, domain, plugin, resent }) {
   const intro = resent
     ? `You already have a key for <strong>${esc(plugin)}</strong> on <strong>${esc(domain)}</strong>. We've re-sent it to you.`
     : `Thanks! A licence key for <strong>${esc(plugin)}</strong> on <strong>${esc(domain)}</strong> is on its way.`;
-  return page(
-    'Check your email',
-    `
-    <div class="ok">${intro}</div>
-    <p>Look out for an email at <strong>${esc(email)}</strong>. If it doesn't arrive within a few
-       minutes, check your spam folder.</p>
-    <p>Lost it already? You can always retrieve it from the
-       <a href="/recover">key recovery page</a>.</p>`
-  );
+  const body = `
+    <div class="page-head"><h1>Check your email</h1></div>
+    <div class="card">
+      <div class="card__body">
+        <div class="alert alert--ok">${intro}</div>
+        <p>Look out for an email at <strong>${esc(email)}</strong>. If it doesn't arrive within a few
+           minutes, check your spam folder.</p>
+        <p class="muted">Lost it already? You can always retrieve it from the
+           <a href="/recover">key recovery page</a>.</p>
+      </div>
+    </div>`;
+  return shell({ title: 'Check your email', body, wrapClass: 'wrap--narrow' });
 }
 
 /**
@@ -379,20 +374,27 @@ function requestDonePage({ email, domain, plugin, resent }) {
  * @returns {string}
  */
 function recoverPage({ error } = {}) {
-  return page(
-    'Recover your licence key',
-    `
-    ${error ? `<div class="err">${esc(error)}</div>` : ''}
-    <p>Enter the email address you used when requesting your key. If we have a key on file,
-       we'll email it to you.</p>
-    <form method="post" action="/recover">
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" required>
-      <button type="submit">Email my key(s)</button>
-    </form>
-    <p class="hint">For your security we don't display keys on this page — they're only ever
-       emailed to the address on file.</p>`
-  );
+  const body = `
+    <div class="page-head">
+      <h1>Recover your licence key</h1>
+      <p>Enter the email address you used when requesting your key.</p>
+    </div>
+    <div class="card">
+      <div class="card__body">
+        ${error ? `<div class="alert alert--err">${esc(error)}</div>` : ''}
+        <p>If we have a key on file, we'll email it to you.</p>
+        <form method="post" action="/recover">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required>
+          <div class="btn-row">
+            <button class="btn" type="submit">Email my key(s)</button>
+          </div>
+        </form>
+        <p class="hint">For your security we don't display keys on this page &mdash; they're only
+           ever emailed to the address on file.</p>
+      </div>
+    </div>`;
+  return shell({ title: 'Recover your licence key', body, wrapClass: 'wrap--narrow' });
 }
 
 /**
@@ -400,35 +402,16 @@ function recoverPage({ error } = {}) {
  * @returns {string}
  */
 function recoverDonePage({ email }) {
-  return page(
-    'Check your email',
-    `
-    <div class="ok">If we have a licence key on file for <strong>${esc(email)}</strong>, we've
-      emailed it to that address.</div>
-    <p>Don't forget to check your spam folder.</p>`
-  );
-}
-
-/**
- * @param {string} title
- * @param {string} body
- * @returns {string}
- */
-function page(title, body) {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)}</title>
-<style>${STYLE}</style>
-</head>
-<body>
-  <h1>${esc(title)}</h1>
-  ${body}
-  <footer>ConnectBench · plugin licences &amp; updates</footer>
-</body>
-</html>`;
+  const body = `
+    <div class="page-head"><h1>Check your email</h1></div>
+    <div class="card">
+      <div class="card__body">
+        <div class="alert alert--ok">If we have a licence key on file for
+          <strong>${esc(email)}</strong>, we've emailed it to that address.</div>
+        <p class="muted">Don't forget to check your spam folder.</p>
+      </div>
+    </div>`;
+  return shell({ title: 'Check your email', body, wrapClass: 'wrap--narrow' });
 }
 
 /**
@@ -439,16 +422,4 @@ function productOptions(selected) {
   return Object.keys(PRODUCTS)
     .map((slug) => `<option value="${esc(slug)}"${slug === selected ? ' selected' : ''}>${esc(slug)}</option>`)
     .join('');
-}
-
-/**
- * @param {string} s
- * @returns {string}
- */
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

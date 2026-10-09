@@ -16,6 +16,7 @@
 
 import { listLicenses, summary } from './db.js';
 import { json, hardFail } from './responses.js';
+import { shell, esc } from './theme.js';
 import {
   createSession,
   verifySession,
@@ -206,12 +207,12 @@ export function handleAdminLogout(request, env) {
 function renderDashboard({ data, licenses, windowSec, nowSec }) {
   const days = Math.round(windowSec / 86400);
 
-  const statCards = `
-    <div class="cards">
-      ${card('Licences issued', data.installs)}
-      ${card(`Active sites (${days}d)`, data.active_sites)}
-      ${card('Plugins', data.by_plugin.length)}
-      ${card('Countries', data.by_country.length)}
+  const tiles = `
+    <div class="tiles">
+      ${tile('Licences issued', data.installs)}
+      ${tile(`Active sites (${days}d)`, data.active_sites)}
+      ${tile('Plugins', data.by_plugin.length)}
+      ${tile('Countries', data.by_country.length)}
     </div>`;
 
   const pluginRows = data.by_plugin
@@ -223,7 +224,7 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
     .join('');
 
   const versionRows = data.by_version
-    .map((r) => `<tr><td>${esc(r.plugin)}</td><td>${esc(r.version || '')}</td><td>${r.sites}</td></tr>`)
+    .map((r) => `<tr><td>${esc(r.plugin)}</td><td><span class="badge badge--muted">${esc(r.version || '')}</span></td><td>${r.sites}</td></tr>`)
     .join('');
 
   const domainRows = data.by_domain
@@ -232,8 +233,8 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
       const versions = String(r.versions || '').split(',').filter(Boolean).map(esc).join(', ');
       return `<tr>
         <td class="mono">${esc(r.domain)}</td>
-        <td>${plugins || '<em>&mdash;</em>'}</td>
-        <td>${versions || '<em>&mdash;</em>'}</td>
+        <td>${plugins || '<em class="muted">&mdash;</em>'}</td>
+        <td>${versions || '<em class="muted">&mdash;</em>'}</td>
         <td>${esc(r.country || '??')}</td>
         <td class="mono">${fmtTime(r.first_seen)}</td>
         <td class="mono">${fmtTime(r.last_seen)}</td>
@@ -245,58 +246,80 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
   const licenseRows = licenses
     .map((l) => {
       const domains = Object.keys(l.domains || {});
+      const status = String(l.status || '');
+      const statusBadge = status === 'active'
+        ? `<span class="badge badge--ok">active</span>`
+        : `<span class="badge badge--off">${esc(status || 'unknown')}</span>`;
+      const mode = String(l.mode || 'observe');
+      const modeBadge = mode === 'enforce'
+        ? `<span class="badge badge--brand">enforce</span>`
+        : `<span class="badge badge--muted">observe</span>`;
       return `<tr>
-        <td class="mono">${esc(l.key)}</td>
+        <td><span class="keycell">${esc(l.key)}</span></td>
         <td>${esc(l.email)}</td>
         <td>${esc(l.name || '')}</td>
         <td>${esc((l.products || []).join(', '))}</td>
-        <td>${esc(l.status)}</td>
-        <td>${esc(l.mode || 'observe')}</td>
-        <td>${l.max_sites == null ? 'unlimited' : l.max_sites}</td>
-        <td>${domains.length ? domains.map(esc).join('<br>') : '<em>none yet</em>'}</td>
+        <td>${statusBadge}</td>
+        <td>${modeBadge}</td>
+        <td>${l.max_sites == null ? '<span class="muted">unlimited</span>' : l.max_sites}</td>
+        <td>${domains.length ? domains.map(esc).join('<br>') : '<em class="muted">none yet</em>'}</td>
       </tr>`;
     })
     .join('');
 
-  return page(
-    `<header>
+  const table = (head, rows, cols) => `
+    <div class="table-wrap">
+      <table><thead><tr>${head}</tr></thead>
+      <tbody>${rows || `<tr><td class="empty" colspan="${cols}">No data yet.</td></tr>`}</tbody></table>
+    </div>`;
+
+  const body = `
+    <div class="page-head">
       <h1>Plugin usage</h1>
-      <form method="post" action="/admin/logout"><button class="ghost" type="submit">Sign out</button></form>
-    </header>
-    <p>Generated ${new Date(nowSec * 1000).toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
-    <p class="hint">Customer self-service forms:
+      <p>Generated ${new Date(nowSec * 1000).toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
+    </div>
+
+    <div class="alert alert--info">
+      Customer self-service forms:
       <a href="/request" target="_blank" rel="noopener">Request a licence key &rarr;</a>
       &middot;
       <a href="/recover" target="_blank" rel="noopener">Recover a lost key &rarr;</a>
-    </p>
-    ${statCards}
+    </div>
 
-    <h2>Installs by plugin</h2>
-    <table><thead><tr><th>Plugin</th><th>Sites</th><th>Check-ins</th></tr></thead>
-    <tbody>${pluginRows || '<tr><td colspan="3"><em>No data yet.</em></td></tr>'}</tbody></table>
+    <div class="stack">
+      ${tiles}
 
-    <h2>Sites by domain</h2>
-    <table><thead><tr>
-      <th>Domain</th><th>Plugins</th><th>Versions</th><th>Country</th>
-      <th>First seen</th><th>Last seen</th><th>Check-ins</th>
-    </tr></thead>
-    <tbody>${domainRows || '<tr><td colspan="7"><em>No data yet.</em></td></tr>'}</tbody></table>
+      <div class="card">
+        <div class="card__head">Installs by plugin</div>
+        ${table('<th>Plugin</th><th>Sites</th><th>Check-ins</th>', pluginRows, 3)}
+      </div>
 
-    <h2>Sites by country</h2>
-    <table><thead><tr><th>Country</th><th>Sites</th></tr></thead>
-    <tbody>${countryRows || '<tr><td colspan="2"><em>No data yet.</em></td></tr>'}</tbody></table>
+      <div class="card">
+        <div class="card__head">Sites by domain</div>
+        ${table('<th>Domain</th><th>Plugins</th><th>Versions</th><th>Country</th><th>First seen</th><th>Last seen</th><th>Check-ins</th>', domainRows, 7)}
+      </div>
 
-    <h2>Sites by version</h2>
-    <table><thead><tr><th>Plugin</th><th>Version</th><th>Sites</th></tr></thead>
-    <tbody>${versionRows || '<tr><td colspan="3"><em>No data yet.</em></td></tr>'}</tbody></table>
+      <div class="card">
+        <div class="card__head">Sites by country</div>
+        ${table('<th>Country</th><th>Sites</th>', countryRows, 2)}
+      </div>
 
-    <h2>Licences (${licenses.length})</h2>
-    <table><thead><tr>
-      <th>Key</th><th>Email</th><th>Name</th><th>Products</th>
-      <th>Status</th><th>Mode</th><th>Max sites</th><th>Domains seen</th>
-    </tr></thead>
-    <tbody>${licenseRows || '<tr><td colspan="8"><em>No licences yet.</em></td></tr>'}</tbody></table>`
-  );
+      <div class="card">
+        <div class="card__head">Sites by version</div>
+        ${table('<th>Plugin</th><th>Version</th><th>Sites</th>', versionRows, 3)}
+      </div>
+
+      <div class="card">
+        <div class="card__head">Licences <span class="count">${licenses.length}</span></div>
+        ${table('<th>Key</th><th>Email</th><th>Name</th><th>Products</th><th>Status</th><th>Mode</th><th>Max sites</th><th>Domains seen</th>', licenseRows, 8)}
+      </div>
+    </div>`;
+
+  const actions = `<form method="post" action="/admin/logout">
+    <button class="btn btn--ghost" type="submit">Sign out</button>
+  </form>`;
+
+  return shell({ title: 'Plugin Usage — Admin', body, actions });
 }
 
 /**
@@ -304,65 +327,20 @@ function renderDashboard({ data, licenses, windowSec, nowSec }) {
  * @returns {string}
  */
 function loginPage({ error } = {}) {
-  return page(
-    `<h1>Admin sign in</h1>
-    ${error ? `<div class="err">${esc(error)}</div>` : ''}
-    <p>Enter your admin token to continue.</p>
-    <form method="post" action="/admin/login">
-      <label for="token">Admin token</label>
-      <input id="token" name="token" type="password" autocomplete="current-password" required autofocus>
-      <button type="submit">Sign in</button>
-    </form>`
-  );
-}
-
-const STYLE = `
-  :root { color-scheme: light dark; }
-  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         margin: 0; padding: 2rem; max-width: 1100px; margin-inline: auto; }
-  header { display: flex; align-items: center; justify-content: space-between; }
-  h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2rem; }
-  .cards { display: flex; gap: 1rem; flex-wrap: wrap; }
-  .card { border: 1px solid #8884; border-radius: 10px; padding: 1rem 1.25rem; min-width: 9rem; }
-  .card .n { font-size: 1.8rem; font-weight: 600; }
-  .card .l { opacity: .7; font-size: .8rem; }
-  table { border-collapse: collapse; width: 100%; margin-top: .5rem; font-size: .9rem; }
-  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8883; vertical-align: top; }
-  th { font-weight: 600; opacity: .8; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  footer { margin-top: 3rem; opacity: .6; font-size: .8rem; }
-  form { margin: 1rem 0; }
-  label { display: block; margin: 1rem 0 .25rem; font-weight: 600; font-size: .9rem; }
-  input { width: 100%; max-width: 22rem; box-sizing: border-box; padding: .55rem .7rem;
-          font: inherit; border: 1px solid #8886; border-radius: 8px; background: transparent; color: inherit; }
-  button { margin-top: 1.25rem; padding: .55rem 1.1rem; font: inherit; font-weight: 600;
-           border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
-  button.ghost { margin: 0; background: transparent; color: inherit; border: 1px solid #8886; }
-  .hint { opacity: .7; font-size: .85rem; }
-  .hint a { color: inherit; }
-  .err { background: #dc2626 1a; border: 1px solid #dc2626; color: #dc2626;
-         padding: .6rem .8rem; border-radius: 8px; margin: 1rem 0; max-width: 22rem; }
-`;
-
-/**
- * @param {string} body
- * @returns {string}
- */
-function page(body) {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>Plugin Usage — Admin</title>
-<style>${STYLE}</style>
-</head>
-<body>
-  ${body}
-  <footer>ConnectBench · admin is session-protected · <code>noindex</code></footer>
-</body>
-</html>`;
+  const body = `
+    <div class="page-head"><h1>Admin sign in</h1></div>
+    <div class="card">
+      <div class="card__body">
+        ${error ? `<div class="alert alert--err">${esc(error)}</div>` : ''}
+        <p class="muted">Enter your admin token to continue.</p>
+        <form method="post" action="/admin/login">
+          <label for="token">Admin token</label>
+          <input id="token" name="token" type="password" autocomplete="current-password" required autofocus>
+          <div class="btn-row"><button class="btn btn--block" type="submit">Sign in</button></div>
+        </form>
+      </div>
+    </div>`;
+  return shell({ title: 'Admin sign in', body, wrapClass: 'wrap--narrow' });
 }
 
 /**
@@ -382,8 +360,8 @@ function htmlPage(body, status = 200) {
  * @param {number} value
  * @returns {string}
  */
-function card(label, value) {
-  return `<div class="card"><div class="n">${Number(value) || 0}</div><div class="l">${esc(label)}</div></div>`;
+function tile(label, value) {
+  return `<div class="tile"><div class="tile__n">${Number(value) || 0}</div><div class="tile__l">${esc(label)}</div></div>`;
 }
 
 /**
@@ -416,12 +394,4 @@ function fmtTime(unixSec) {
   const n = Number(unixSec);
   if (!n) return '\u2014';
   return new Date(n * 1000).toISOString().replace('T', ' ').slice(0, 16);
-}
-
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

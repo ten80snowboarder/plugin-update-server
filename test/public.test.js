@@ -118,8 +118,9 @@ describe('GET /request pre-fill', () => {
     expect(html).toContain('value="My Site"');
     // The matching product option is selected.
     expect(html).toMatch(/<option value="cfdump" selected>/);
-    // The "opened from your plugin" hint is shown.
-    expect(html).toContain('Opened from your CFDUMP plugin');
+    // The "opened from your plugin" hint is shown (the label is wrapped in a
+    // <strong>, so match loosely on the surrounding text).
+    expect(html).toMatch(/Opened from your <strong>CFDUMP<\/strong> plugin/);
   });
 
   it('ignores an unknown plugin (no option selected)', async () => {
